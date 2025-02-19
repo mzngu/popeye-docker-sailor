@@ -5,8 +5,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install --omit=dev
 
-COPY . /app
-WORKDIR /app
+COPY . .
+
 
 EXPOSE 80
 

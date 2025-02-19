@@ -3,91 +3,71 @@ services:
     build: ./poll
     ports:
       - "5000:80"
-    depends_on:
-      redis:
-        condition: service_healthy
     networks:
       - poll-tier
-    environment:
-      REDIS_HOST: redis
-    restart: on-failure
-
+    depends_on:
+      redis:
+        condition: service_started
+    env_file:
+      - .env  
+    restart: always
+ 
   redis:
-    image: redis:7-alpine
+    image: redis:alpine
     ports:
       - "6379:6379"
     networks:
       - poll-tier
       - back-tier
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: on-failure
-
+    restart: always
+ 
   worker:
     build: ./worker
-    depends_on:
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
     networks:
       - back-tier
-    environment:
-      REDIS_HOST: redis
-      POSTGRES_HOST: db
-      POSTGRES_DB: votes
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_PORT: 5432
-    restart: on-failure
-
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env  
+    restart: always
+ 
   db:
     image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: votes
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+    networks:
+      - result-tier
+      - back-tier
     volumes:
       - db-data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
-    networks:
-      - back-tier
-      - result-tier
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql  
+    env_file:
+      - .env  
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d votes"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: on-failure
-
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: always
+ 
   result:
-    build:
-      context: ./result
-      dockerfile: Dockerfile
-      # exclude:
-      #   - node_modules
+    build: ./result
     ports:
       - "5001:80"
+    networks:
+      - result-tier    
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - result-tier
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_DB: votes
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_PORT: 5432
-    restart: on-failure
-
-networks:
-  poll-tier:
-  result-tier:
-  back-tier:
-
+    env_file:
+      - .env  
+    restart: always
+ 
 volumes:
   db-data:
+ 
+networks:
+  back-tier:
+  poll-tier:
+  result-tier:
